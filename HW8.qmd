@@ -1,0 +1,153 @@
+---
+title: "HW7 HW8a"
+author: "Data Science 2"
+editor: visual
+format:
+  html:
+    embed-resources: true
+execute:
+  echo: true
+  message: false
+  warning: false
+output: 
+  code_folding: false
+---
+
+```{r setup}
+library(tidyverse)
+library(tidytext)
+library(schrute)
+library(topicmodels)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+office <- theoffice
+
+```
+
+# The Office
+
+Let's continue to work with *The Office* text from the [schrute](https://cran.r-project.org/web/packages/schrute/index.html) package.
+
+# Primary Topics
+
+For each season (not each episode anymore), determine the primary topics for the show using 1) a TF-IDF approach and 2) an LDA approach. You should do at least some cleaning of the data to exclude words that don't make sense.
+
+# Cleaning
+
+```{r, cleaning}
+office_words <- office |>
+  unnest_tokens(word, text) |>
+  anti_join(stop_words |> distinct(word)) |>
+  filter(str_detect(word, "^[a-z]+$")) |>
+  select(index, season, word )
+
+office_stop <- c("yeah", "hey", "uh", "um", "gonna", "guy",
+                 "guys", "okay", "ok", "oh", "huh", "hmm", 
+                 "ah", "alright","yep", "yea")
+
+characters <- c("michael", "jim", "pam", "dwight", 
+                "kevin", "angela", "oscar", "ryan", 
+                "creed", "darryl", "karen", "jo", 
+                "toby", "stanley","phyllis", 
+                "andy", "kelly","meredith", "erin", 
+                "jan", "holly")
+
+# I used my memory from watching the show to remove 
+# characters that appeared in either big roles or several seasons. 
+
+office_words <- office |>
+  unnest_tokens(word, text) |>
+  filter(str_detect(word, "^[a-z]+$")) |>
+  anti_join(stop_words, by = "word") |>
+  filter(!word %in% office_stop) |>
+  filter(!word %in% characters) 
+
+```
+
+# TF-IDF
+
+```{r, tfidf}
+season_counts <- office_words |>
+  count(season, word) |>
+  group_by(season) |>
+  mutate(TF = n / sum(n)) |>
+  ungroup()
+
+season_df <- office_words |>
+  distinct(season, word) |>
+  count(word) |>
+  rename(Dt = n) |>
+  mutate(DF = Dt / n_distinct(office_words$season),
+    DF_adj = Dt / (1 + n_distinct(office_words$season)),
+    IDF = log(1 / DF),
+    IDF_adj = log(1 / DF_adj))
+
+season_tfidf <- season_counts |>
+  left_join(season_df, by = "word") |>
+  mutate(TFIDF = TF * IDF,
+    TFIDF_adj = TF * IDF_adj)
+
+top_season_words <- season_tfidf |>
+  group_by(season) |>
+  slice_max(TFIDF_adj, n = 10) |>
+  arrange(season, desc(TFIDF_adj)) |>
+  ungroup()
+
+top_season_words |>
+  mutate(word = reorder_within(word, TFIDF_adj, season)) |>
+  ggplot(aes(TFIDF_adj, word, fill = factor(season))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~season, scales = "free", ncol = 3) +
+  scale_y_reordered() +
+  labs(title = "Top TF-IDF Words by Season in The Office",
+       x = "TF-IDF",
+       y = "Word") +
+  theme(axis.text.y = element_text(size = 5))
+```
+
+# LDA
+
+```{r, lda}
+office_counts <- office_words |>
+  count(season, word)
+
+office_counts <- office_counts |>
+  filter(n >= 5)
+
+office_dtm <- office_counts |>
+  cast_dtm(season, word, n)
+
+office_lda <- LDA(office_dtm, k = 9)
+
+office_topics <- tidy(office_lda, matrix = "beta")
+
+top_terms_office <- office_topics |>
+  group_by(topic) |>
+  slice_max(beta, n = 10) |>
+  ungroup()
+
+top_terms_office |>
+  mutate(term = reorder_within(term, beta, topic)) |>
+  ggplot(aes(beta, term, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~topic, scales = "free") +
+  scale_y_reordered() +
+  labs(title = "Primary Topics in The Office (LDA)",
+    x = "Beta (Word Probability)",
+    y = "Term")
+```
+
+```{r, lda2}
+season_topics <- tidy(office_lda, matrix = "gamma") |>
+  rename(season = document)
+
+ggplot(season_topics, aes(x = factor(season), 
+                          y = gamma, fill = factor(topic))) +
+  geom_col() +
+  labs(title = "Topic Distribution Across Seasons",
+    x = "Season",
+    y = "Topic Probability",
+    fill = "Topic")
+```
