@@ -26,6 +26,8 @@ office <- theoffice
 
 ```
 
+> Since `dplyr`, `tidyr`, `stringr`, and `ggplot2` are all part of `tidyverse`, they don't need to be loaded separately, so you could shorten this code chunk by removing those lines. You could also remove `office <- theoffice` and just refer to `theoffice` in the rest of your code, but what you have works fine too.
+
 # The Office
 
 Let's continue to work with *The Office* text from the [schrute](https://cran.r-project.org/web/packages/schrute/index.html) package.
@@ -65,6 +67,8 @@ office_words <- office |>
   filter(!word %in% characters) 
 
 ```
+
+> Instead of manually listing the character names, you could try using the `babynames` dataset, which would be more thorough in case there were any names that you missed. You could create the `characters` dataset by using an `inner_join` between `office_words` and `babynames`. Once again, what you have works, but just another option to consider.
 
 # TF-IDF
 
@@ -107,6 +111,8 @@ top_season_words |>
   theme(axis.text.y = element_text(size = 5))
 ```
 
+> If you want, you could collapse this code into a single pipeline instead of saving each step as its own dataframe. The code that you have above makes it easier to see what goes on in each step by breaking it down, but may be less efficient.
+
 # LDA
 
 ```{r, lda}
@@ -139,6 +145,9 @@ top_terms_office |>
     y = "Term")
 ```
 
+> Similarly to the section above, you could combine some of this code into a single pipeline. For example, you could replace the first few steps with:\
+> `office_dtm <- office_words |> count(season, word) |> filter(n >= 5) |> cast_dtm(season, word, n)`
+
 ```{r, lda2}
 season_topics <- tidy(office_lda, matrix = "gamma") |>
   rename(season = document)
@@ -151,3 +160,5 @@ ggplot(season_topics, aes(x = factor(season),
     y = "Topic Probability",
     fill = "Topic")
 ```
+
+> Your visualizations throughout the HW look great - very easy to read/understand and great use of color!
