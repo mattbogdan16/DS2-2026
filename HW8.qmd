@@ -73,31 +73,24 @@ office_words <- office |>
 # TF-IDF
 
 ```{r, tfidf}
-season_counts <- office_words |>
-  count(season, word) |>
+top_season_words <- office_words |>
+    count(season, word, name = "n") |>
   group_by(season) |>
   mutate(TF = n / sum(n)) |>
-  ungroup()
-
-season_df <- office_words |>
-  distinct(season, word) |>
-  count(word) |>
-  rename(Dt = n) |>
-  mutate(DF = Dt / n_distinct(office_words$season),
-    DF_adj = Dt / (1 + n_distinct(office_words$season)),
-    IDF = log(1 / DF),
-    IDF_adj = log(1 / DF_adj))
-
-season_tfidf <- season_counts |>
-  left_join(season_df, by = "word") |>
-  mutate(TFIDF = TF * IDF,
-    TFIDF_adj = TF * IDF_adj)
-
-top_season_words <- season_tfidf |>
+  ungroup() |>
+    left_join(
+    office_words |>
+      distinct(season, word) |>
+      count(word, name = "Dt") |>
+      mutate(
+        DF_adj = Dt / (1 + n_distinct(office_words$season)),
+        IDF_adj = log(1 / DF_adj)), by = "word") |>
+    mutate(TFIDF_adj = TF * IDF_adj) |>
   group_by(season) |>
   slice_max(TFIDF_adj, n = 10) |>
   arrange(season, desc(TFIDF_adj)) |>
   ungroup()
+
 
 top_season_words |>
   mutate(word = reorder_within(word, TFIDF_adj, season)) |>
@@ -105,9 +98,11 @@ top_season_words |>
   geom_col(show.legend = FALSE) +
   facet_wrap(~season, scales = "free", ncol = 3) +
   scale_y_reordered() +
-  labs(title = "Top TF-IDF Words by Season in The Office",
-       x = "TF-IDF",
-       y = "Word") +
+  labs(
+    title = "Top TF-IDF Words by Season in The Office",
+    x = "TF-IDF",
+    y = "Word"
+  ) +
   theme(axis.text.y = element_text(size = 5))
 ```
 
@@ -116,13 +111,9 @@ top_season_words |>
 # LDA
 
 ```{r, lda}
-office_counts <- office_words |>
-  count(season, word)
-
-office_counts <- office_counts |>
-  filter(n >= 5)
-
-office_dtm <- office_counts |>
+office_dtm <- office_words |> 
+  count(season, word) |> 
+  filter(n >= 5) |> 
   cast_dtm(season, word, n)
 
 office_lda <- LDA(office_dtm, k = 9)
